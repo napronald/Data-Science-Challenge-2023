@@ -3,6 +3,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from typing import List
+import torch
+
+from torch.utils.data import Dataset
 from cardiac_ml_tools import read_data_dirs, get_standard_leads, get_activation_time
 
 data_dirs = []
@@ -13,13 +16,9 @@ for x in os.listdir(DIR):
         data_dirs.append(DIR + x)
 file_pairs = read_data_dirs(data_dirs)
 
-case = 16116 #16117
-
-
 num_timesteps = 500
 titles = ["I", "II", "III", "aVR", "aVL", "aVF", "V1", "V2", "V3", "V4", "V5", "V6"]
 reorder = {1:1,2:5,3:9,4:2,5:6,6:10,7:3,8:7,9:11,10:4,11:8,12:12} 
-
 
 
 # for case in range(16116):
@@ -39,7 +38,8 @@ reorder = {1:1,2:5,3:9,4:2,5:6,6:10,7:3,8:7,9:11,10:4,11:8,12:12}
 #     print(ActTime.shape)
 
 
-dataset = []
+feature = []
+label = []
 
 for case in range(16116):
     pECGData = np.load(file_pairs[case][0])
@@ -48,9 +48,50 @@ for case in range(16116):
     VmData = np.load(file_pairs[case][1])
     ActTime = get_activation_time(VmData)
 
-    dataset.append([pECGData, ActTime])
+    feature.append(pECGData)
+    label.append(ActTime)
 
+feature_vectors = np.array(feature)
+label_vectors = np.array(label)
 
-df = pd.DataFrame(dataset, columns=["Feature", "Label"])
+df = pd.DataFrame({
+    'Feature': [vec1 for vec1 in feature_vectors],
+    'Label': [vec2 for vec2 in label_vectors],
+})
+
+print(df)
 
 df.to_csv(os.path.join(os.getcwd(), "dataset.csv"), index=False)
+
+
+class CustomImageDataset(Dataset):
+    def __init__(self, annotations_file):
+        self.img_labels = annotations_file
+
+        pass
+
+    def __len__(self):
+        return len(self.img_labels)
+
+    def __getitem__(self, idx):
+        vector = self.img_labels[idx][0]
+        label = self.img_labels[idx][1]
+
+        return vector, label
+
+
+# csvfile = [[0, 1, 2], [0, 2, 4]]
+csvfile = df
+cid = CustomImageDataset(csvfile)
+
+print(cid[0])
+
+
+
+data_loader = torch.utils.data.DataLoader(
+    cid,
+    batch_size=64,
+    shuffle=True,
+    drop_last=True,
+    num_workers=0,
+)

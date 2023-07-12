@@ -2,70 +2,87 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+from torch.utils.data import Dataset
+from sklearn.metrics import confusion_matrix
+from sklearn import preprocessing
+import glob, re, os
+import numpy as np
+import matplotlib.pyplot as plt
+from typing import List
+from cardiac_ml_tools import read_data_dirs, get_standard_leads, get_activation_time
+
+
+data_dirs = []
+regex = r'data_hearts_dd_0p2*'
+DIR='/home/rnap/scratch/dsc/task3/intracardiac_dataset/' # This should be the path to the intracardiac_dataset, it can be downloaded using data_science_challenge_2023/download_intracardiac_dataset.sh
+for x in os.listdir(DIR):
+    if re.match(regex, x):
+        data_dirs.append(DIR + x)
+file_pairs = read_data_dirs(data_dirs)
+
+
 
 batch_size = 64
 torch.manual_seed(42)
 
+# for case in range(len(file_pairs)):
+#     pECGData = np.load(file_pairs[case][0])
+#     for lead in range(pECGData.shape[1]):
+#         pECGData[:, lead] = preprocessing.normalize([pECGData[:, lead]])[0]
+
+
+
+
 class CustomImageDataset(Dataset):
     def __init__(self, annotations_file):
-        # self.img_labels = pd.read_csv(annotations_file)
         self.img_labels = annotations_file
-
-        pass
 
     def __len__(self):
         return len(self.img_labels)
 
     def __getitem__(self, idx):
-        vector = self.img_labels[idx][0]
-        # vector = self.img_labels.iloc[idx, 0]
-        # label = self.img_labels.iloc[idx, 1]
-        # label = self.img_labels.iloc[idx, 1]
-        label = self.img_labels[idx][1]
-        # vector = self.transform(vector)
-        # label = self.transform(label)
+        vector = self.img_labels[0]
+        vector = torch.tensor(vector, dtype=torch.float32)
 
-        # vector = torch.stack([torch.Tensor(eval(v)) for v in vector])
-        # label = torch.stack([torch.Tensor(eval(l)) for l in label])
-
+        label = self.img_labels[1]
+        label = torch.tensor(label, dtype=torch.float32)
+        
         return vector, label
 
-# import csv
-# import numpy as np
 
-# class CustomImageDataset:
-#     def __init__(self, csv_file):
-#         self.data = []
-#         with open(csv_file, 'r') as file:
-#             reader = csv.reader(file)
-#             next(reader)
-#             for row in reader:
-#                 feature_vector = 0
-#                 # feature_vector = np.fromstring(row[0][1:-1], dtype=np.float32, sep=' ')
-#                 # print(row[1][1:-1])
-#                 # print(row[0][1:-1].replace("[","").replace("]",""))
+feature = []
+label = []
 
-#                 label = np.fromstring(row[0][1:-1].replace("[","").replace("]",""), dtype=np.float32, sep=' ')
-#                 self.data.append((feature_vector, label))
+for case in range(len(file_pairs)):
+    pECGData = np.load(file_pairs[case][0])
+    pECGData = get_standard_leads(pECGData)
+
+    for lead in range(pECGData.shape[1]):
+        pECGData[:, lead] = preprocessing.normalize([pECGData[:, lead]])[0]
     
-#     def __getitem__(self, index):
-#         feature_vector, label = self.data[index]
-#         return feature_vector, torch.from_numpy(label)
-    
-#     def __len__(self):
-#         return len(self.data)
+    VmData = np.load(file_pairs[case][1])
+    VmData = get_activation_time(VmData)
 
+    # for i in range(VmData.shape[1]):
+        # VmData[:, i] = preprocessing.normalize([VmData[:, i]])[0]
 
-# csvfile = "dataset.csv"
-csvfile = [[0, 1, 2], [0, 2, 4]]
-cid = CustomImageDataset(csvfile)
+    feature.append(pECGData)
+    label.append(VmData)
 
-print(cid[0][2])
-print(cid[1])
+data = [feature, label]
+# data = [pECGData, VmData]
+# data = [ [[0, 1, 2], [3, 4, 5]], [[6, 7, 8], [9, 10, 11]] ]
+cid = CustomImageDataset(data)
 
-# print(cid[0][0].shape)
-# print(cid[0][1].shape)
+print(cid[0][0][0].shape)
+print(cid[0][0][0])
 
+print(cid[0][1][0].shape)
+print(cid[0][1][0])
 
 data_loader = torch.utils.data.DataLoader(
     cid,
@@ -74,4 +91,3 @@ data_loader = torch.utils.data.DataLoader(
     drop_last=True,
     num_workers=0,
 )
-

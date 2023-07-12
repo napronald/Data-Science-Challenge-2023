@@ -1,4 +1,3 @@
-import pandas as pd
 import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
@@ -11,10 +10,10 @@ from sklearn.metrics import confusion_matrix
 from sklearn import preprocessing
 import glob, re, os
 import numpy as np
-import matplotlib.pyplot as plt
 from typing import List
 from cardiac_ml_tools import read_data_dirs, get_standard_leads, get_activation_time
-
+import warnings
+warnings.filterwarnings("ignore")
 
 data_dirs = []
 regex = r'data_hearts_dd_0p2*'
@@ -72,22 +71,74 @@ data_loader = torch.utils.data.DataLoader(
 )
 
 
-class LSTMClassifier(nn.Module):
-    def __init__(self, input_dim, hidden_dim, layer_dim, output_dim):
+class AE(torch.nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim):
         super().__init__()
+        self.input_dim = input_dim
         self.hidden_dim = hidden_dim
-        self.layer_dim = layer_dim
-        self.rnn = nn.LSTM(input_dim, hidden_dim, layer_dim, batch_first=True)
-        self.fc = nn.Linear(hidden_dim, output_dim)
+        self.output_dim = output_dim
+         
+        self.encoder = nn.Sequential(
+            nn.Linear(input_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, 36),
+            nn.ReLU(),
+            nn.Linear(36, 18),
+            nn.ReLU(),
+            nn.Linear(18, 9)
+        )
+         
+        self.decoder = nn.Sequential(
+            nn.Linear(9, 18),
+            nn.ReLU(),
+            nn.Linear(18, 36),
+            nn.ReLU(),
+            nn.Linear(36, 64),
+            nn.ReLU(),
+            nn.Linear(64, 128),
+            nn.ReLU(),
+            nn.Linear(128, output_dim)
+        )
+
+        # self.dense = nn.Sequential(
+        #     nn.Linear(6000, 512),
+        #     nn.ReLU(),
+        #     nn.Linear(512, 256),
+        #     nn.ReLU(),
+        #     nn.Linear(256, 75),
+        #     nn.ReLU(),
+        #     nn.Linear(75, 1)
+        # )
+ 
+    # def forward(self, x):
+    #     print(x.shape)
+    #     encoded = self.encoder(x)
+    #     print(encoded.shape) # 64x500x9
+    #     # decoded = self.decoder(encoded)
+    #     # decoded = self.decoder(encoded).reshape(-1, self.output_dim)
+    #     decoded = self.decoder(encoded)
+    #    # print(decoded.reshape(-1, self.output_dim).shape)
+
+    #     print(decoded.shape)
+    #     return decoded
 
     def forward(self, x):
-        x = x.to(torch.float32)  # Convert input tensor to double precision
-        out, (hn, cn) = self.rnn(x)
-        out = self.fc(hn[-1])
-        return out
+        encoded = self.encoder(x)
+        print(encoded.shape)
+        decoded = self.decoder(encoded)
+        print(decoded.shape)
+        decoded = decoded.view(decoded.size(0), -1, self.output_dim)
+        print(decoded.view(decoded.size(0), -1, self.output_dim).shape)
+        output = self.dense(decoded)
+        print(output.shape)
+        # return decoded
+        return output
 
 
-model = LSTMClassifier(input_dim=12, hidden_dim=128, layer_dim=1 ,output_dim=75)
+model = AE(input_dim=500*12, hidden_dim=128, output_dim=75)
+model = model.double()
 
 criterion = nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -101,7 +152,9 @@ for epoch in range(1, num_epochs):
         label = label.float()
         optimizer.zero_grad()
         logits = model(feature)
-        
+        print(logits.shape)
+        print(logits.unsqueeze(2))
+        print(label.shape)
         loss = criterion(logits.unsqueeze(2), label)
         loss.backward()
         optimizer.step()

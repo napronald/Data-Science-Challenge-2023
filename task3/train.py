@@ -28,24 +28,7 @@ file_pairs = read_data_dirs(data_dirs)
 batch_size = 64
 torch.manual_seed(42)
 
-
-# class CustomImageDataset(Dataset):
-#     def __init__(self, annotations_file):
-#         self.img_labels = annotations_file
-
-#     def __len__(self):
-#         return len(self.img_labels)
-
-#     def __getitem__(self, idx):
-#         vector = self.img_labels[0]
-#         vector = torch.tensor(vector, dtype=torch.float32)
-
-#         label = self.img_labels[1]
-#         label = torch.tensor(label, dtype=torch.float32)
-        
-#         return vector, label
-
-class CustomImageDataset(Dataset):
+class CustomDataset(Dataset):
     def __init__(self, features, labels):
         self.features = features
         self.labels = labels
@@ -58,28 +41,6 @@ class CustomImageDataset(Dataset):
         label = self.labels[idx]
 
         return feature, label
-
-
-# class CustomImageDataset(Dataset):
-#     def __init__(self, annotations_file):
-#         self.img_labels = annotations_file
-#         self.transform = transforms.Compose([
-#             transforms.ToTensor(),
-#             transforms.Normalize(mean=[0.5], std=[0.5])
-#         ])
-
-#     def __len__(self):
-#         return len(self.img_labels)
-
-#     def __getitem__(self, idx):
-#         vector = self.img_labels[idx][0]
-#         vector = self.transform(vector)
-
-#         label = self.img_labels[idx][1]
-#         label = self.transform(label)
-
-#         return vector, label
-
 
 
 feature = []
@@ -99,23 +60,55 @@ for case in range(len(file_pairs)):
     label.append(torch.tensor(VmData))
 
 
-cid = CustomImageDataset(feature, label)
+cid = CustomDataset(feature, label)
 
-print(cid[0][0].shape)
-
-print(cid[0][1].shape)
 
 data_loader = torch.utils.data.DataLoader(
     cid,
-    batch_size=2,
+    batch_size=batch_size,
     shuffle=True,
     drop_last=True,
     num_workers=0,
 )
 
-for feature, label in data_loader:
-    # print(feature[0][0].shape)
-    # print(label[0][1].shape)
-    print(feature.shape)
-    print(label.shape)
-    break
+
+class LSTMClassifier(nn.Module):
+    def __init__(self, input_dim, hidden_dim, layer_dim, output_dim):
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.layer_dim = layer_dim
+        self.rnn = nn.LSTM(input_dim, hidden_dim, layer_dim, batch_first=True)
+        self.fc = nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, x):
+        x = x.to(torch.float32)  # Convert input tensor to double precision
+        out, (hn, cn) = self.rnn(x)
+        out = self.fc(hn[-1])
+        return out
+
+
+model = LSTMClassifier(input_dim=12, hidden_dim=128, layer_dim=1 ,output_dim=75)
+
+criterion = nn.MSELoss()
+optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+num_epochs = 100
+
+
+for epoch in range(1, num_epochs):
+    loss_epoch = 0
+    for step, (feature, label) in enumerate(data_loader):
+        label = label.float()
+        optimizer.zero_grad()
+        logits = model(feature)
+        
+        loss = criterion(logits.unsqueeze(2), label)
+        loss.backward()
+        optimizer.step()
+
+        if step % 250 == 0:
+            print(
+                f"Step [{step}/{len(data_loader)}]\t loss_instance: {loss.item()}")
+        loss_epoch += loss.item()
+
+    print(f"Epoch [{epoch}/{num_epochs}]\t Loss: {loss_epoch / len(data_loader)}")

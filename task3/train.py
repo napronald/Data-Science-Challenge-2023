@@ -7,6 +7,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import Dataset
 from sklearn.metrics import confusion_matrix
+from sklearn.metrics import r2_score
 from sklearn import preprocessing
 import glob, re, os
 import numpy as np
@@ -96,102 +97,73 @@ data_loader = torch.utils.data.DataLoader(
 )
 
 
-# class Arch(nn.Module):
-#     def __init__(self, input_dim=6000, hidden_dim=77, layer_dim=5):
-#         super(Arch, self).__init__()
-#         self.hidden_dim = hidden_dim
-#         self.layer_dim = layer_dim
-#         self.rnn = nn.LSTM(input_dim, hidden_dim, layer_dim, batch_first=True)
-#         self.cnn = nn.Conv1d(in_channels=1, out_channels=1, kernel_size=3)
-#         self.sigmoid = nn.Sigmoid()
-#         # self.batch = nn.BatchNorm1d()
- 
+# class CNN(nn.Module):
+#     def __init__(self):
+#         super(CNN, self).__init__()
 #         self.model = nn.Sequential(
-#             nn.Conv1d(1 ,75, kernel_size=3),
+#             nn.Conv1d(12, 75, kernel_size=500),
 #             nn.BatchNorm1d(75),
 #             nn.ReLU(),
 #             nn.Sigmoid()
 #         )
 
-
 #     def forward(self, x):
-#         # out, (hn, cn) = self.rnn(x)
-#         # decoded = self.cnn(x)
-#         # decoded = self.sigmoid(decoded)
 #         decoded = self.model(x)
-#         print(decoded.shape)
+#         # print(decoded.shape)
 #         return decoded
 
-# model = Arch()
 
-# lr = 0.001
-# weight_decay = 0
-# epochs = 10
-# loss_fn = nn.MSELoss()
+# model = CNN()
 
-# optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-
-# for epoch in range(epochs + 1):
-#     for step, (X_train, y_train) in enumerate(data_loader):
-#         # print(X_train.shape)
-#         X_train = X_train.reshape(-1, 12*500)
-#         # print(X_train.shape)
-#         X_train = X_train.to(torch.float32)
-#         optimizer.zero_grad()
-#         y_pred = model(X_train.unsqueeze(1))
-#         y_train = y_train.reshape(-1, 75*1)
-#         y_train = y_train.unsqueeze(1)
-#         # print(y_train.shape)
-#         y_train = y_train.float()
-#         loss = loss_fn(y_pred*200, y_train)
-#         # print(y_pred.shape, y_train.shape)
-#         loss.backward()
-#         optimizer.step()
-#     print('-----------------------------')
-#     print(f'Epoch: {epoch}')
-#     print(f'Loss: {loss.item()}')
-#     # print(f'Accuracy: {}')
-
-
-
-class LSTMCNN(nn.Module):
-    def __init__(self):
-        super(LSTMCNN, self).__init__()
-        self.model = nn.Sequential(
-            nn.Conv1d(12, 75, kernel_size=500),
-            nn.BatchNorm1d(75),
-            nn.ReLU(),
-            nn.Sigmoid()
+class SqueezeNet1D(nn.Module):
+    def __init__(self, output_dim):
+        super(SqueezeNet1D, self).__init__()
+        self.features = nn.Sequential(
+            nn.Conv1d(12, 64, kernel_size=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool1d(kernel_size=2, stride=2),
+            nn.Conv1d(64, 16, kernel_size=1),
+            nn.ReLU(inplace=True),
+            nn.Conv1d(16, 16, kernel_size=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool1d(kernel_size=2, stride=2),
+            nn.Conv1d(16, output_dim, kernel_size=1),
+            nn.ReLU(inplace=True),
+        )
+        self.classifier = nn.Sequential(
+            nn.AdaptiveAvgPool1d(1),
+            nn.Flatten(),
         )
 
     def forward(self, x):
-        decoded = self.model(x)
-        # print(decoded.shape)
-        return decoded
+        x = self.features(x)
+        x = self.classifier(x)
+        return x
+    
 
+model = SqueezeNet1D(output_dim=75)
 
-model = LSTMCNN()
-
-lr = 0.001
-weight_decay = 0
 criterion = nn.MSELoss()
 
-optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-
-epochs = 100
+epochs = 250
 for epoch in range(epochs):
     for step, (feature, label) in enumerate(data_loader):
-        feature = feature.permute(0, 2, 1)  # Permute dimensions for input tensor
         feature = feature.to(torch.float32)
-
+        # print(feature.shape)
         optimizer.zero_grad()
-        y_pred = model(feature)
-
+        y_pred = model(feature.permute(0, 2, 1))
+        y_pred = y_pred.unsqueeze(2)
+        # print(y_pred.shape)
+        # print(label.shape)
         label = label.float()
         loss = criterion(y_pred, label/200)
-
         loss.backward()
         optimizer.step()
+        y_pred_np = y_pred.detach().numpy().reshape(-1)
+        label_np = label.detach().numpy().reshape(-1)
+        r2 = r2_score(label_np/200, y_pred_np)
+    print(r2)
 
-    print(f'Epoch: {epoch} {loss.item()}')
+    print(f'Epoch: {epoch} loss: {loss.item()}')

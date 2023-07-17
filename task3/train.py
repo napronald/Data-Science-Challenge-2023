@@ -1,20 +1,16 @@
 import torch
 from torch.utils.data import Dataset
-import torchvision.transforms as transforms
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import Dataset
-from sklearn.metrics import confusion_matrix
 from sklearn.metrics import r2_score
-from sklearn import preprocessing
 import glob, re, os
 import numpy as np
 from typing import List
 from cardiac_ml_tools import read_data_dirs, get_standard_leads, get_activation_time
-import warnings
-warnings.filterwarnings("ignore")
+
 
 data_dirs = []
 regex = r'data_hearts_dd_0p2*'
@@ -27,7 +23,6 @@ file_pairs = read_data_dirs(data_dirs)
 
 batch_size = 64
 torch.manual_seed(42)
-
 
 class CustomDataset(Dataset):
     def __init__(self, features, labels):
@@ -115,31 +110,82 @@ data_loader = torch.utils.data.DataLoader(
 
 # model = CNN()
 
+# class SqueezeNet1D(nn.Module):
+#     def __init__(self, output_dim):
+#         super(SqueezeNet1D, self).__init__()
+#         self.features = nn.Sequential(
+#             nn.Conv1d(12, 64, kernel_size=1),
+#             nn.ReLU(inplace=True),
+#             nn.MaxPool1d(kernel_size=2, stride=2),
+#             nn.Conv1d(64, 16, kernel_size=1),
+#             nn.ReLU(inplace=True),
+#             nn.Conv1d(16, 16, kernel_size=1),
+#             nn.ReLU(inplace=True),
+#             nn.MaxPool1d(kernel_size=2, stride=2),
+#             nn.Conv1d(16, output_dim, kernel_size=1),
+#             nn.ReLU(inplace=True),
+#         )
+#         self.classifier = nn.Sequential(
+#             nn.AdaptiveAvgPool1d(1),
+#             nn.Flatten(),
+#         )
+
+#     def forward(self, x):
+#         x = self.features(x)
+#         x = self.classifier(x)
+#         return x
+
+# model = SqueezeNet1D(output_dim=75)
+
+# criterion = nn.MSELoss()
+
+# optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+# epochs = 250
+# for epoch in range(epochs):
+#     for step, (feature, label) in enumerate(data_loader):
+#         feature = feature.to(torch.float32)
+#         # print(feature.shape)
+#         optimizer.zero_grad()
+#         y_pred = model(feature.permute(0, 2, 1))
+#         y_pred = y_pred.unsqueeze(2)
+#         # print(y_pred.shape)
+#         # print(label.shape)
+#         label = label.float()
+#         loss = criterion(y_pred, label/200)
+#         loss.backward()
+#         optimizer.step()
+#         y_pred_np = y_pred.detach().numpy().reshape(-1)
+#         label_np = label.detach().numpy().reshape(-1)
+#         r2 = r2_score(label_np/200, y_pred_np)
+#     print(r2)
+
+#     print(f'Epoch: {epoch} loss: {loss.item()}')
+
+
 class SqueezeNet1D(nn.Module):
     def __init__(self, output_dim):
         super(SqueezeNet1D, self).__init__()
-        self.features = nn.Sequential(
-            nn.Conv1d(12, 64, kernel_size=1),
+
+        self.model = nn.Sequential(
+            nn.Conv1d(12, 512, kernel_size=1),
             nn.ReLU(inplace=True),
             nn.MaxPool1d(kernel_size=2, stride=2),
-            nn.Conv1d(64, 16, kernel_size=1),
+            nn.Conv1d(512, 256, kernel_size=1),
+            nn.BatchNorm1d(256),
             nn.ReLU(inplace=True),
-            nn.Conv1d(16, 16, kernel_size=1),
+            nn.Conv1d(256, 128, kernel_size=1),
+            nn.BatchNorm1d(128), 
             nn.ReLU(inplace=True),
             nn.MaxPool1d(kernel_size=2, stride=2),
-            nn.Conv1d(16, output_dim, kernel_size=1),
+            nn.Conv1d(128, output_dim, kernel_size=1),
             nn.ReLU(inplace=True),
-        )
-        self.classifier = nn.Sequential(
-            nn.AdaptiveAvgPool1d(1),
-            nn.Flatten(),
+            nn.Sigmoid()
         )
 
     def forward(self, x):
-        x = self.features(x)
-        x = self.classifier(x)
+        x = self.model(x)
         return x
-    
 
 model = SqueezeNet1D(output_dim=75)
 
@@ -147,23 +193,15 @@ criterion = nn.MSELoss()
 
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-epochs = 250
+epochs = 100
 for epoch in range(epochs):
     for step, (feature, label) in enumerate(data_loader):
         feature = feature.to(torch.float32)
-        # print(feature.shape)
         optimizer.zero_grad()
         y_pred = model(feature.permute(0, 2, 1))
-        y_pred = y_pred.unsqueeze(2)
-        # print(y_pred.shape)
-        # print(label.shape)
         label = label.float()
-        loss = criterion(y_pred, label/200)
+        loss = criterion(y_pred, label/185)
         loss.backward()
         optimizer.step()
-        y_pred_np = y_pred.detach().numpy().reshape(-1)
-        label_np = label.detach().numpy().reshape(-1)
-        r2 = r2_score(label_np/200, y_pred_np)
-    print(r2)
 
-    print(f'Epoch: {epoch} loss: {loss.item()}')
+    print(f'Epoch: {epoch} Loss: {loss.item()}')

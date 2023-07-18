@@ -40,7 +40,6 @@ class CustomDataset(Dataset):
     
 feature = []
 label = []
-_max = []
 
 for case in range(len(file_pairs)):
     pECGData = np.load(file_pairs[case][0])
@@ -48,9 +47,7 @@ for case in range(len(file_pairs)):
         
     VmData = np.load(file_pairs[case][1])
     VmData = get_activation_time(VmData)
-    
-    _max.append(np.max(VmData))
-    
+        
     label.append(torch.tensor(VmData))
     feature.append(np.array(pECGData))
 
@@ -73,7 +70,6 @@ label = [(l - act_data_min) / (act_data_max - act_data_min) for l in label]
 
 feature = [torch.tensor(f, dtype=torch.float32) for f in feature]
 label = [torch.tensor(l, dtype=torch.float32) for l in label]
-
 
 
 cid = CustomDataset(feature[:12894], label[:12894])
@@ -101,17 +97,18 @@ class SqueezeNet1D(nn.Module):
         super(SqueezeNet1D, self).__init__()
 
         self.model = nn.Sequential(
-            nn.Conv1d(500, 512, kernel_size=3),
+            nn.Conv1d(500, 1024, kernel_size=3),
+            nn.BatchNorm1d(1024),
+            nn.ReLU(inplace=True),
+            nn.Conv1d(1024, 512, kernel_size=3),
             nn.BatchNorm1d(512),
             nn.ReLU(inplace=True),
-            # nn.MaxPool1d(kernel_size=1, stride=2),
             nn.Conv1d(512, 256, kernel_size=3),
             nn.BatchNorm1d(256),
             nn.ReLU(inplace=True),
             nn.Conv1d(256, 128, kernel_size=3),
             nn.BatchNorm1d(128),
             nn.ReLU(inplace=True),
-            # nn.MaxPool1d(kernel_size=1, stride=2),
             nn.Conv1d(128, 75, kernel_size=3),
             nn.BatchNorm1d(75),
             nn.ReLU(inplace=True),
@@ -161,8 +158,7 @@ for epoch in range(epochs):
 
         y_pred = y_pred * (act_data_max - act_data_min) + act_data_min
         label = label * (act_data_max - act_data_min) + act_data_min
-        print(y_pred[0])
-        print(label[0])
+
         for i in range(batch_size):
             diff = (y_pred[i, :, :] - label[i, :, :])
             sum += torch.sqrt(torch.norm(diff, p=2))
@@ -191,7 +187,6 @@ with torch.no_grad():
         label = label * (act_data_max - act_data_min) + act_data_min
 
         sum=0
-
         for i in range(batch_size):
             diff = (y_pred[i, :, :] - label[i, :, :])
             sum += torch.sqrt(torch.norm(diff, p=2))
@@ -199,5 +194,7 @@ with torch.no_grad():
         print(err)
         avg_error.append(err)
 
-    print(sum(avg_error)/len(avg_error))
-    
+    avg_error = torch.tensor(avg_error)
+    print(torch.sum(avg_error)/len(avg_error))
+print(y_pred[0])
+print(label[0])

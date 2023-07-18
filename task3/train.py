@@ -82,9 +82,18 @@ train_data = torch.utils.data.DataLoader(
     num_workers=0,
 )
 
+# cid = CustomDataset(feature[12894:], label[12894:])
+
+# test_data = torch.utils.data.DataLoader(
+#     cid,
+#     batch_size=batch_size,
+#     shuffle=True,
+#     drop_last=True,
+#     num_workers=0,
+# )
 cid = CustomDataset(feature[12894:], label[12894:])
 
-test_data = torch.utils.data.DataLoader(
+valid_data = torch.utils.data.DataLoader(
     cid,
     batch_size=batch_size,
     shuffle=True,
@@ -92,23 +101,60 @@ test_data = torch.utils.data.DataLoader(
     num_workers=0,
 )
 
+
+# class SqueezeNet1D(nn.Module):
+#     def __init__(self, output_dim):
+#         super(SqueezeNet1D, self).__init__()
+
+#         self.model = nn.Sequential(
+#             nn.Conv1d(500, 1024, kernel_size=3),
+#             nn.BatchNorm1d(1024),
+#             nn.ReLU(inplace=True),
+#             nn.Conv1d(1024, 512, kernel_size=3),
+#             nn.BatchNorm1d(512),
+#             nn.ReLU(inplace=True),
+#             nn.Conv1d(512, 256, kernel_size=3),
+#             nn.BatchNorm1d(256),
+#             nn.ReLU(inplace=True),
+#             nn.Conv1d(256, 128, kernel_size=3),
+#             nn.BatchNorm1d(128),
+#             nn.ReLU(inplace=True),
+#             nn.Conv1d(128, 75, kernel_size=3),
+#             nn.BatchNorm1d(75),
+#             nn.ReLU(inplace=True),
+#         )
+#         self.avg_pool = nn.AdaptiveAvgPool1d(1)  
+#         self.fc = nn.Linear(75, output_dim) 
+#         self.sigmoid = nn.Sigmoid()
+
+#     def forward(self, x):
+#         x = self.model(x)
+#         # print(x.shape)
+#         x = self.avg_pool(x)
+#         # print(x.shape)
+#         x = x.view(x.size(0), -1)
+#         # print(x.shape)
+#         x = self.fc(x)
+#         # print(x.shape)
+#         x = self.sigmoid(x)
+#         # print(x.shape)
+#         return x
 class SqueezeNet1D(nn.Module):
     def __init__(self, output_dim):
         super(SqueezeNet1D, self).__init__()
 
         self.model = nn.Sequential(
-            nn.Conv1d(500, 1024, kernel_size=3),
-            nn.BatchNorm1d(1024),
-            nn.ReLU(inplace=True),
-            nn.Conv1d(1024, 512, kernel_size=3),
+            nn.Conv1d(500, 512, kernel_size=3),
             nn.BatchNorm1d(512),
             nn.ReLU(inplace=True),
+            # nn.MaxPool1d(kernel_size=1, stride=2),
             nn.Conv1d(512, 256, kernel_size=3),
             nn.BatchNorm1d(256),
             nn.ReLU(inplace=True),
             nn.Conv1d(256, 128, kernel_size=3),
             nn.BatchNorm1d(128),
             nn.ReLU(inplace=True),
+            # nn.MaxPool1d(kernel_size=1, stride=2),
             nn.Conv1d(128, 75, kernel_size=3),
             nn.BatchNorm1d(75),
             nn.ReLU(inplace=True),
@@ -130,71 +176,157 @@ class SqueezeNet1D(nn.Module):
         # print(x.shape)
         return x
 
+# model = SqueezeNet1D(output_dim=75)
 
+# criterion = nn.MSELoss(reduction='sum')
+
+# optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+# scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=True)
+
+# epochs = 50
+# for epoch in range(epochs):
+#     err = 0
+#     avg_error = []
+#     for step, (feature, label) in enumerate(train_data):
+#         feature = feature.to(torch.float32)
+#         optimizer.zero_grad()
+#         y_pred = model(feature)
+#         label = label.float()
+#         loss = criterion(y_pred.unsqueeze(2), label.squeeze(1))
+#         loss.backward()
+#         optimizer.step()
+
+#         sum=0
+
+#         y_pred = y_pred.unsqueeze(2)
+#         label = label.squeeze(1)
+
+#         y_pred = y_pred * (act_data_max - act_data_min) + act_data_min
+#         label = label * (act_data_max - act_data_min) + act_data_min
+
+#         for i in range(batch_size):
+#             diff = (y_pred[i, :, :] - label[i, :, :])
+#             sum += torch.sqrt(torch.norm(diff, p=2))
+#         err = sum/batch_size
+#         avg_error.append(err)
+
+#     scheduler.step(loss)
+#     avg_error = torch.tensor(avg_error)
+#     print(torch.sum(avg_error)/len(avg_error))
+#     print(f'Epoch: {epoch} Loss: {loss.item()}')
+
+
+# model.eval()
+# err = 0
+# avg_error = []
+# with torch.no_grad():
+#     for feature, label in test_data:
+#         feature = feature.to(torch.float32)
+#         label = label.float()
+
+#         y_pred = model(feature)
+#         label = label.squeeze(1)
+#         y_pred = y_pred.unsqueeze(2)
+
+#         y_pred = y_pred * (act_data_max - act_data_min) + act_data_min
+#         label = label * (act_data_max - act_data_min) + act_data_min
+
+#         sum=0
+#         for i in range(batch_size):
+#             diff = (y_pred[i, :, :] - label[i, :, :])
+#             sum += torch.sqrt(torch.norm(diff, p=2))
+#         err = sum/batch_size
+#         print(err)
+#         avg_error.append(err)
+
+#     avg_error = torch.tensor(avg_error)
+#     print(torch.sum(avg_error)/len(avg_error))
+# print(y_pred[0])
+# print(label[0])
 model = SqueezeNet1D(output_dim=75)
 
 criterion = nn.MSELoss(reduction='sum')
 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=True)
 
-epochs = 50
+def checkpoint(model, filename):
+    torch.save(model.state_dict(), filename)
+
+epochs = 200
+strikes = 0
+warnings = 10
+lowest_valid_error = float('inf')
 for epoch in range(epochs):
-    err = 0
-    avg_error = []
+    train_err = 0
+    train_avg_error = []
+    valid_err = 0
+    valid_avg_error = []
+        
+    model.train()
     for step, (feature, label) in enumerate(train_data):
         feature = feature.to(torch.float32)
         optimizer.zero_grad()
         y_pred = model(feature)
         label = label.float()
-        loss = criterion(y_pred.unsqueeze(2), label.squeeze(1))
+
+        sum=0
+
+        y_pred = y_pred.unsqueeze(2)
+        label = label.squeeze(1)
+
+        y_pred = y_pred * (act_data_max - act_data_min) + act_data_min
+        label = label * (act_data_max - act_data_min) + act_data_min
+
+        loss = criterion(y_pred, label)
         loss.backward()
         optimizer.step()
-
-        sum=0
-
-        y_pred = y_pred.unsqueeze(2)
-        label = label.squeeze(1)
-
-        y_pred = y_pred * (act_data_max - act_data_min) + act_data_min
-        label = label * (act_data_max - act_data_min) + act_data_min
-
+        
         for i in range(batch_size):
             diff = (y_pred[i, :, :] - label[i, :, :])
             sum += torch.sqrt(torch.norm(diff, p=2))
-        err = sum/batch_size
-        avg_error.append(err)
+        train_err = sum/batch_size
+        train_avg_error.append(train_err)
 
     scheduler.step(loss)
-    avg_error = torch.tensor(avg_error)
-    print(torch.sum(avg_error)/len(avg_error))
-    print(f'Epoch: {epoch} Loss: {loss.item()}')
+    train_avg_error = torch.tensor(train_avg_error)
+    print(f'Epoch: {epoch+1} Loss: {loss.item()} Train Err: {float(torch.sum(train_avg_error)/len(train_avg_error))}')
+    
+    model.eval()
+    with torch.no_grad():
+        for feature, label in valid_data:
+            feature = feature.to(torch.float32)
+            label = label.float()
 
+            y_pred = model(feature)
+            label = label.squeeze(1)
+            y_pred = y_pred.unsqueeze(2)
 
-model.eval()
-err = 0
-avg_error = []
-with torch.no_grad():
-    for feature, label in test_data:
-        feature = feature.to(torch.float32)
-        label = label.float()
+            y_pred = y_pred * (act_data_max - act_data_min) + act_data_min
+            label = label * (act_data_max - act_data_min) + act_data_min
 
-        y_pred = model(feature)
-        label = label.squeeze(1)
-        y_pred = y_pred.unsqueeze(2)
+            sum=0
 
-        y_pred = y_pred * (act_data_max - act_data_min) + act_data_min
-        label = label * (act_data_max - act_data_min) + act_data_min
+            for i in range(batch_size):
+                diff = (y_pred[i, :, :] - label[i, :, :])
+                sum += torch.sqrt(torch.norm(diff, p=2))
+            valid_err = sum/batch_size
+            valid_avg_error.append(valid_err)
 
-        sum=0
-        for i in range(batch_size):
-            diff = (y_pred[i, :, :] - label[i, :, :])
-            sum += torch.sqrt(torch.norm(diff, p=2))
-        err = sum/batch_size
-        print(err)
-        avg_error.append(err)
-
-    avg_error = torch.tensor(avg_error)
-    print(torch.sum(avg_error)/len(avg_error))
-print(y_pred[0])
-print(label[0])
+        valid_avg_error = torch.tensor(valid_avg_error)
+        
+        if lowest_valid_error > float(torch.sum(valid_avg_error)/len(valid_avg_error)):
+            lowest_valid_error = float(torch.sum(valid_avg_error)/len(valid_avg_error))
+            best_epoch = epoch
+            checkpoint(model, f"best_epoch.pth")
+            strikes = 0
+            
+        else:
+            strikes += 1
+            
+        print(f'Valid Avg Err: {float(torch.sum(valid_avg_error)/len(valid_avg_error))}')
+        
+    if warnings == strikes:
+        break
+        
+print(best_epoch)

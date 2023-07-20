@@ -10,6 +10,7 @@ import glob, re, os
 import numpy as np
 from typing import List
 from cardiac_ml_tools import read_data_dirs, get_standard_leads, get_activation_time
+import matplotlib.pyplot as plt
 
 data_dirs = []
 regex = r'data_hearts_dd_0p2*'
@@ -130,17 +131,31 @@ class SqueezeNet1D(nn.Module):
         return x
 
 
-model = SqueezeNet1D(output_dim=75)
+# model = SqueezeNet1D(output_dim=75)
 
-# model_fp = 'checkpoint_6.tar'
+
+# model_fp = 'checkpoint.tar'
 
 # model.load_state_dict(torch.load(model_fp, map_location=device.type)['net'])
 
-model = model.to(device)
+# model = model.to(device)
+
+model = SqueezeNet1D(output_dim=75)
 
 criterion = nn.MSELoss(reduction='sum')
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=25, verbose=True, min_lr=1e-6)
+scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=20, verbose=True, min_lr=1e-6)
+
+
+model_fp = '/home/rnap/scratch/dsc/task3/checkpoint.tar'
+
+# Load the saved model state_dict
+checkpoint = torch.load(model_fp, map_location=device.type)
+
+# Load the model state_dict
+model.load_state_dict(checkpoint['net'])
+
+model = model.to(device)
 
 def save_model(path, model, optimizer, current_epoch):
     out = os.path.join(path, "checkpoint.tar")
@@ -149,14 +164,19 @@ def save_model(path, model, optimizer, current_epoch):
 
 epochs = 1000
 strikes = 0
-warnings = 100
+warnings = 75
 lowest_valid_error = float('inf')
+
+train_losses = []
+valid_losses = []
+
 for epoch in range(epochs):
     train_err = 0
     train_avg_error = torch.tensor([]).to(device)
     valid_err = 0
     valid_avg_error = torch.tensor([]).to(device)
-        
+    true_labels = []
+    predicted_labels = []
     model.train()
     for step, (feature, label) in enumerate(train_data):
         feature = feature.to(torch.float32).to(device)
@@ -175,6 +195,8 @@ for epoch in range(epochs):
         label = label * (act_data_max - act_data_min) + act_data_min
 
         train_avg_error = torch.cat((torch.reshape((torch.sum(abs(label - y_pred))/(batch_size*75)),(-1,)),train_avg_error), dim=0).to(device)
+        true_labels.extend(label.squeeze(1).cpu().numpy().tolist())
+        predicted_labels.extend(y_pred.squeeze(2).detach().cpu().numpy().tolist())
 
     scheduler.step(loss)
     train_avg_error = torch.tensor(train_avg_error)
@@ -194,11 +216,13 @@ for epoch in range(epochs):
             label = label * (act_data_max - act_data_min) + act_data_min
 
             valid_avg_error = torch.cat((torch.reshape((torch.sum(abs(label - y_pred))/(batch_size*75)),(-1,)),valid_avg_error), dim=0).to(device)
+            true_labels.extend(label.squeeze(1).cpu().detach().numpy().tolist())
+            predicted_labels.extend(y_pred.squeeze(2).cpu().detach().numpy().tolist())
 
         if lowest_valid_error > float(torch.sum(valid_avg_error)/len(valid_avg_error)):
             lowest_valid_error = float(torch.sum(valid_avg_error)/len(valid_avg_error))
             best_epoch = epoch
-            path = "/home/rnap/scratch/dsc/task3/"
+            path = os.getcwd()
             save_model(path ,model, optimizer, best_epoch)
             strikes = 0
             
@@ -206,8 +230,23 @@ for epoch in range(epochs):
             strikes += 1
             
         print(f'Valid Avg Err: {float(torch.sum(valid_avg_error)/len(valid_avg_error))}')
-        
+        true_labels = np.array(true_labels).flatten()
+        predicted_labels = np.array(predicted_labels).flatten()
+        r2 = r2_score(true_labels, predicted_labels)
+        print(f'R2 Score: {r2:.4f}')
+        train_losses.append(float(torch.sum(train_avg_error)/len(train_avg_error)))
+        valid_losses.append(float(torch.sum(valid_avg_error)/len(valid_avg_error)))
+        # print(label[0])
+        # print(y_pred[0])
+
     if warnings == strikes:
         break
         
+plt.plot(range(1, len(train_losses)+1), train_losses, label='Train Loss')
+plt.plot(range(1, len(valid_losses)+1), valid_losses, label='Valid Loss')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.legend()
+plt.show()
+plt.savefig("plot.png")
 print(best_epoch)

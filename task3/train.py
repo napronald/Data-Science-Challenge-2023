@@ -93,33 +93,34 @@ class SqueezeNet1D(nn.Module):
     def __init__(self, output_dim):
         super(SqueezeNet1D, self).__init__()
         self.model = nn.Sequential(
-            nn.Conv1d(12, 1024, kernel_size=3),
+            nn.Conv1d(12, 1024, kernel_size=2),
             nn.BatchNorm1d(1024),
             nn.ReLU(inplace=True),
-            nn.MaxPool1d(kernel_size=3, stride=1),
+            nn.MaxPool1d(kernel_size=1, stride=1),
             nn.Conv1d(1024, 768, kernel_size=3),
             nn.BatchNorm1d(768),
             nn.ReLU(inplace=True),
-            nn.MaxPool1d(kernel_size=3, stride=1),
+            nn.MaxPool1d(kernel_size=1, stride=1),
             nn.Conv1d(768, 512, kernel_size=3),
             nn.BatchNorm1d(512),
             nn.ReLU(inplace=True),
-            nn.MaxPool1d(kernel_size=3, stride=1),
+            nn.MaxPool1d(kernel_size=1, stride=1),
             nn.Conv1d(512, 256, kernel_size=3),
             nn.BatchNorm1d(256),
             nn.ReLU(inplace=True),
-            nn.MaxPool1d(kernel_size=3, stride=1),
+            nn.MaxPool1d(kernel_size=1, stride=1),
             nn.Conv1d(256, 128, kernel_size=3),
             nn.BatchNorm1d(128),
             nn.ReLU(inplace=True),
-            nn.MaxPool1d(kernel_size=3, stride=1),
+            nn.MaxPool1d(kernel_size=1, stride=1),
             nn.Conv1d(128, 75, kernel_size=3),
             nn.BatchNorm1d(75),
             nn.ReLU(inplace=True),
-            nn.MaxPool1d(kernel_size=3, stride=1),
+            nn.MaxPool1d(kernel_size=1, stride=1),
         )
-        self.avg_pool = nn.AdaptiveAvgPool1d(1)  
-        self.fc = nn.Linear(75, output_dim) 
+
+        self.avg_pool = nn.AdaptiveAvgPool1d(1)
+        self.fc = nn.Linear(75, output_dim)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
@@ -140,7 +141,7 @@ class SqueezeNet1D(nn.Module):
 model = SqueezeNet1D(output_dim=75)
 
 criterion = nn.MSELoss(reduction='sum')
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=25, verbose=True, min_lr=1e-6)
 
 
@@ -163,7 +164,7 @@ def save_model(file_path, model, optimizer, loss, epoch):
 
 epochs = 1000
 strikes = 0
-warnings = 75
+warnings = 100
 lowest_valid_error = float('inf')
 
 train_losses = []

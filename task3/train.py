@@ -132,16 +132,22 @@ class SqueezeNet1D(nn.Module):
 
 model = SqueezeNet1D(output_dim=75)
 
+# model_fp = 'checkpoint_6.tar'
+
+# model.load_state_dict(torch.load(model_fp, map_location=device.type)['net'])
+
 model = model.to(device)
 
 criterion = nn.MSELoss(reduction='sum')
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=25, verbose=True, min_lr=1e-6)
 
-def checkpoint(model, filename):
-    torch.save(model.state_dict(), filename)
+def save_model(path, model, optimizer, current_epoch):
+    out = os.path.join(path, "checkpoint.tar")
+    state = {'net': model.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': current_epoch}
+    torch.save(state, out)
 
-epochs = 500
+epochs = 1000
 strikes = 0
 warnings = 100
 lowest_valid_error = float('inf')
@@ -168,13 +174,6 @@ for epoch in range(epochs):
         y_pred = y_pred * (act_data_max - act_data_min) + act_data_min
         label = label * (act_data_max - act_data_min) + act_data_min
 
-        # sum=0
-        # for i in range(batch_size):
-        #     diff = (y_pred[i, :, :] - label[i, :, :])
-        #     sum += torch.sqrt(torch.norm(diff, p=2))
-        # train_err = sum / batch_size
-        # train_avg_error.append(train_err)
-
         train_avg_error = torch.cat((torch.reshape((torch.sum(abs(label - y_pred))/(batch_size*75)),(-1,)),train_avg_error), dim=0).to(device)
 
     scheduler.step(loss)
@@ -194,21 +193,13 @@ for epoch in range(epochs):
             y_pred = y_pred * (act_data_max - act_data_min) + act_data_min
             label = label * (act_data_max - act_data_min) + act_data_min
 
-        # sum=0
-        #     for i in range(batch_size):
-        #         diff = (y_pred[i, :, :] - label[i, :, :])
-        #         sum += torch.sqrt(torch.norm(diff, p=2))
-        #     valid_err = sum / batch_size
-        #     valid_avg_error.append(valid_err)
-
-        # valid_avg_error = torch.tensor(valid_avg_error)
-
             valid_avg_error = torch.cat((torch.reshape((torch.sum(abs(label - y_pred))/(batch_size*75)),(-1,)),valid_avg_error), dim=0).to(device)
 
         if lowest_valid_error > float(torch.sum(valid_avg_error)/len(valid_avg_error)):
             lowest_valid_error = float(torch.sum(valid_avg_error)/len(valid_avg_error))
             best_epoch = epoch
-            checkpoint(model, f"best_epoch.pth")
+            path = "/home/rnap/scratch/dsc/task3/"
+            save_model(path ,model, optimizer, best_epoch)
             strikes = 0
             
         else:

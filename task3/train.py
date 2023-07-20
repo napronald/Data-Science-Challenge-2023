@@ -132,12 +132,6 @@ class SqueezeNet1D(nn.Module):
         return x
 
 
-# model_fp = 'checkpoint.tar'
-
-# model.load_state_dict(torch.load(model_fp, map_location=device.type)['net'])
-
-# model = model.to(device)
-
 model = SqueezeNet1D(output_dim=75)
 
 criterion = nn.MSELoss(reduction='sum')
@@ -146,10 +140,11 @@ scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=25, ve
 
 
 # model_fp = '/home/rnap/scratch/dsc/task3/checkpoint.tar'
-
 # checkpoint = torch.load(model_fp, map_location=device.type)
-
-# model.load_state_dict(checkpoint['net'])
+# model.load_state_dict(checkpoint['model_state_dict'])
+# optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+# start_epoch = checkpoint['epoch'] + 1  # Start from the next epoch
+# last_loss = checkpoint['loss']  # Get the loss from the checkpoint
 
 model = model.to(device)
 
@@ -223,7 +218,7 @@ for epoch in range(epochs):
             lowest_valid_error = float(torch.sum(valid_avg_error)/len(valid_avg_error))
             best_epoch = epoch 
             path = os.getcwd() + "/checkpoint.tar"
-            save_model(path, model, optimizer, loss, best_epoch)
+            # save_model(path, model, optimizer, loss, best_epoch)
             strikes = 0
             
         else:

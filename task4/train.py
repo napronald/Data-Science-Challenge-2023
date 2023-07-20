@@ -10,6 +10,7 @@ import glob, re, os
 import numpy as np
 from typing import List
 from cardiac_ml_tools import read_data_dirs, get_standard_leads, get_activation_time
+import matplotlib.pyplot as plt
 
 data_dirs = []
 regex = r'data_hearts_dd_0p2*'
@@ -19,7 +20,7 @@ for x in os.listdir(DIR):
         data_dirs.append(DIR + x)
 file_pairs = read_data_dirs(data_dirs)
 
-batch_size = 512
+batch_size = 32
 torch.manual_seed(42)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -88,6 +89,7 @@ valid_data = torch.utils.data.DataLoader(
     num_workers=0,
 )
 
+
 class SqueezeNet1D(nn.Module):
     def __init__(self, output_dim):
         super(SqueezeNet1D, self).__init__()
@@ -129,7 +131,6 @@ class SqueezeNet1D(nn.Module):
         x = self.sigmoid(x)
         return x
 
-
 model = SqueezeNet1D(output_dim=500)
 
 # model_fp = 'checkpoint_6.tar'
@@ -139,24 +140,35 @@ model = SqueezeNet1D(output_dim=500)
 model = model.to(device)
 
 criterion = nn.MSELoss(reduction='sum')
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10, verbose=True, min_lr=1e-6)
 
-def save_model(path, model, optimizer, current_epoch):
-    out = os.path.join(path, "checkpoint.tar")
-    state = {'net': model.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': current_epoch}
-    torch.save(state, out)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=20, verbose=True, min_lr=1e-6)
 
-epochs = 1000
+def save_model(file_path, model, optimizer, loss, epoch):
+    checkpoint = {
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'scheduler': scheduler.state_dict(),
+        'loss': loss,
+    }
+    torch.save(checkpoint, file_path)
+
+epochs = 200
 strikes = 0
 warnings = 100
 lowest_valid_error = float('inf')
+
+train_losses = []
+valid_losses = []
+
 for epoch in range(epochs):
     train_err = 0
     train_avg_error = torch.tensor([]).to(device)
     valid_err = 0
     valid_avg_error = torch.tensor([]).to(device)
-        
+    true_labels = []
+    predicted_labels = []
     model.train()
     for step, (feature, label) in enumerate(train_data):
         feature = feature.to(torch.float32).to(device)
@@ -174,7 +186,10 @@ for epoch in range(epochs):
         y_pred = y_pred * (act_data_max - act_data_min) + act_data_min
         label = label * (act_data_max - act_data_min) + act_data_min
 
-        train_avg_error = torch.cat((torch.reshape((torch.sum(abs(label - y_pred))/(batch_size*75)),(-1,)),train_avg_error), dim=0).to(device)
+
+        train_avg_error = torch.cat((torch.reshape((torch.sum(abs(label - y_pred))/(batch_size*75*500)),(-1,)),train_avg_error), dim=0).to(device)
+        true_labels.extend(label.squeeze(1).cpu().numpy().tolist())
+        predicted_labels.extend(y_pred.squeeze(2).detach().cpu().numpy().tolist())
 
     scheduler.step(loss)
     train_avg_error = torch.tensor(train_avg_error)
@@ -193,20 +208,35 @@ for epoch in range(epochs):
             y_pred = y_pred * (act_data_max - act_data_min) + act_data_min
             label = label * (act_data_max - act_data_min) + act_data_min
 
-            valid_avg_error = torch.cat((torch.reshape((torch.sum(abs(label - y_pred))/(batch_size*75)),(-1,)),valid_avg_error), dim=0).to(device)
+            valid_avg_error = torch.cat((torch.reshape((torch.sum(abs(label - y_pred))/(batch_size*75*500)),(-1,)),valid_avg_error), dim=0).to(device)
+            true_labels.extend(label.squeeze(1).cpu().detach().numpy().tolist())
+            predicted_labels.extend(y_pred.squeeze(2).cpu().detach().numpy().tolist())
 
         if lowest_valid_error > float(torch.sum(valid_avg_error)/len(valid_avg_error)):
             lowest_valid_error = float(torch.sum(valid_avg_error)/len(valid_avg_error))
-            best_epoch = epoch
-            path = "/home/rnap/scratch/dsc/task4/"
-            save_model(path ,model, optimizer, best_epoch)
+            best_epoch = epoch 
+            path = os.getcwd() + "/checkpoint.tar"
+            save_model(path, model, optimizer, loss, best_epoch)
             strikes = 0
         else:
             strikes += 1
             
         print(f'Valid Avg Err: {float(torch.sum(valid_avg_error)/len(valid_avg_error))}')
-        
+        true_labels = np.array(true_labels).flatten()
+        predicted_labels = np.array(predicted_labels).flatten()
+        r2 = r2_score(true_labels, predicted_labels)
+        print(f'R2 Score: {r2:.4f}')
+        train_losses.append(float(torch.sum(train_avg_error)/len(train_avg_error)))
+        valid_losses.append(float(torch.sum(valid_avg_error)/len(valid_avg_error)))
+
     if warnings == strikes:
         break
         
+plt.plot(range(1, len(train_losses)+1), train_losses, label='Train Loss')
+plt.plot(range(1, len(valid_losses)+1), valid_losses, label='Valid Loss')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.legend()
+plt.show()
+plt.savefig("plot.png")
 print(best_epoch)

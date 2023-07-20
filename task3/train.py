@@ -69,7 +69,7 @@ act_data_max = act_data_max.reshape(1, 1, -1).to(device)
 
 label = [(l - act_data_min) / (act_data_max - act_data_min) for l in label]
 
-cid = CustomDataset(feature[:15311], label[:15311])
+cid = CustomDataset(feature[:12894], label[:12894])
 
 train_data = torch.utils.data.DataLoader(
     cid,
@@ -79,7 +79,7 @@ train_data = torch.utils.data.DataLoader(
     num_workers=0,
 )
 
-cid = CustomDataset(feature[15311:], label[15311:])
+cid = CustomDataset(feature[12894:], label[12894:])
 
 valid_data = torch.utils.data.DataLoader(
     cid,
@@ -131,9 +131,6 @@ class SqueezeNet1D(nn.Module):
         return x
 
 
-# model = SqueezeNet1D(output_dim=75)
-
-
 # model_fp = 'checkpoint.tar'
 
 # model.load_state_dict(torch.load(model_fp, map_location=device.type)['net'])
@@ -143,24 +140,26 @@ class SqueezeNet1D(nn.Module):
 model = SqueezeNet1D(output_dim=75)
 
 criterion = nn.MSELoss(reduction='sum')
-optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=20, verbose=True, min_lr=1e-6)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=25, verbose=True, min_lr=1e-6)
 
 
-model_fp = '/home/rnap/scratch/dsc/task3/checkpoint.tar'
+# model_fp = '/home/rnap/scratch/dsc/task3/checkpoint.tar'
 
-# Load the saved model state_dict
-checkpoint = torch.load(model_fp, map_location=device.type)
+# checkpoint = torch.load(model_fp, map_location=device.type)
 
-# Load the model state_dict
-model.load_state_dict(checkpoint['net'])
+# model.load_state_dict(checkpoint['net'])
 
 model = model.to(device)
 
-def save_model(path, model, optimizer, current_epoch):
-    out = os.path.join(path, "checkpoint.tar")
-    state = {'net': model.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': current_epoch}
-    torch.save(state, out)
+def save_model(file_path, model, optimizer, loss, epoch):
+    checkpoint = {
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'loss': loss,
+    }
+    torch.save(checkpoint, file_path)
 
 epochs = 1000
 strikes = 0
@@ -221,9 +220,9 @@ for epoch in range(epochs):
 
         if lowest_valid_error > float(torch.sum(valid_avg_error)/len(valid_avg_error)):
             lowest_valid_error = float(torch.sum(valid_avg_error)/len(valid_avg_error))
-            best_epoch = epoch
-            path = os.getcwd()
-            save_model(path ,model, optimizer, best_epoch)
+            best_epoch = epoch 
+            path = os.getcwd() + "/checkpoint.tar"
+            save_model(path, model, optimizer, loss, best_epoch)
             strikes = 0
             
         else:
@@ -236,8 +235,7 @@ for epoch in range(epochs):
         print(f'R2 Score: {r2:.4f}')
         train_losses.append(float(torch.sum(train_avg_error)/len(train_avg_error)))
         valid_losses.append(float(torch.sum(valid_avg_error)/len(valid_avg_error)))
-        # print(label[0])
-        # print(y_pred[0])
+
 
     if warnings == strikes:
         break

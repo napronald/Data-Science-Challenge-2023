@@ -60,7 +60,6 @@ lead_data_max = lead_data_max.reshape(1, 1, -1)
 
 feature = (feature - lead_data_min) / (lead_data_max - lead_data_min)
 
-
 act_data_min = torch.min(torch.min(torch.stack(label, dim=0), dim=1).values, dim=0).values
 act_data_min = act_data_min.reshape(1, 1, -1).to(device)
 
@@ -186,9 +185,22 @@ for epoch in range(epochs):
         # loss.backward()
         RMSE_loss.backward()
         optimizer.step()
+        # y_pred = y_pred.permute(0,1,2)
 
-        y_pred = y_pred * (act_data_max - act_data_min) + act_data_min
-        label = label * (act_data_max - act_data_min) + act_data_min
+        # act_data_min = act_data_min.permute(0,2,1)
+        # act_data_max = act_data_max.permute(0,2,1)
+
+        # print(act_data_max.shape)
+        # print(act_data_min.shape)
+
+        # print(y_pred.shape)
+        # print(label.shape)
+
+        # y_pred = y_pred * (act_data_max - act_data_min) + act_data_min
+        # label = label * (act_data_max - act_data_min) + act_data_min
+
+        y_pred = torch.mul(y_pred, (act_data_max - act_data_min)) + act_data_min
+        label = torch.mul(label , (act_data_max - act_data_min)) + act_data_min
 
 
         train_avg_error = torch.cat((torch.reshape((torch.sum(abs(label - y_pred))/(batch_size*75*500)),(-1,)),train_avg_error), dim=0).to(device)
@@ -207,10 +219,13 @@ for epoch in range(epochs):
 
             y_pred = model(feature.permute(0, 2, 1))
             label = label.squeeze(1)
-            y_pred = y_pred.unsqueeze(2)
+            y_pred = y_pred.permute(0,2,1)
 
-            y_pred = y_pred * (act_data_max - act_data_min) + act_data_min
-            label = label * (act_data_max - act_data_min) + act_data_min
+            # y_pred = y_pred * (act_data_max - act_data_min) + act_data_min
+            # label = label * (act_data_max - act_data_min) + act_data_min
+            
+            y_pred = torch.mul(y_pred, (act_data_max - act_data_min)) + act_data_min
+            label = torch.mul(label , (act_data_max - act_data_min)) + act_data_min
 
             valid_avg_error = torch.cat((torch.reshape((torch.sum(abs(label - y_pred))/(batch_size*75*500)),(-1,)),valid_avg_error), dim=0).to(device)
             true_labels.extend(label.squeeze(1).cpu().detach().numpy().tolist())

@@ -119,19 +119,20 @@ class SqueezeNet1D(nn.Module):
             nn.ReLU(inplace=True),
             nn.MaxPool1d(kernel_size=3, stride=1),
         )
-        self.avg_pool = nn.AdaptiveAvgPool1d(1)  
-        self.fc = nn.Linear(75, output_dim) 
+        self.avg_pool = nn.AdaptiveAvgPool1d(500)  
+        self.fc = nn.Linear(500, output_dim) 
         self.sigmoid = nn.Sigmoid()
+
 
     def forward(self, x):
         x = self.model(x)
         x = self.avg_pool(x)
-        x = x.view(x.size(0), -1)
         x = self.fc(x)
         x = self.sigmoid(x)
         return x
 
-model = SqueezeNet1D(output_dim=500)
+model = SqueezeNet1D(output_dim=500)  # Adjust output dimension to 500x75
+
 
 # model_fp = 'checkpoint_6.tar'
 
@@ -139,9 +140,10 @@ model = SqueezeNet1D(output_dim=500)
 
 model = model.to(device)
 
-criterion = nn.MSELoss(reduction='sum')
+# criterion = nn.MSELoss(reduction='sum')
+loss_fn = nn.MSELoss()
 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=20, verbose=True, min_lr=1e-6)
 
 def save_model(file_path, model, optimizer, loss, epoch):
@@ -176,11 +178,13 @@ for epoch in range(epochs):
         y_pred = model(feature.permute(0,2,1))
         label = label.float().to(device)
 
-        y_pred = y_pred.unsqueeze(2)
         label = label.squeeze(1)
+        y_pred = y_pred.permute(0,2,1)
+        # loss = criterion(y_pred, label)
+        RMSE_loss = torch.sqrt(loss_fn(y_pred, label))
 
-        loss = criterion(y_pred, label)
-        loss.backward()
+        # loss.backward()
+        RMSE_loss.backward()
         optimizer.step()
 
         y_pred = y_pred * (act_data_max - act_data_min) + act_data_min
@@ -191,9 +195,9 @@ for epoch in range(epochs):
         true_labels.extend(label.squeeze(1).cpu().numpy().tolist())
         predicted_labels.extend(y_pred.squeeze(2).detach().cpu().numpy().tolist())
 
-    scheduler.step(loss)
+    scheduler.step(RMSE_loss)
     train_avg_error = torch.tensor(train_avg_error)
-    print(f'Epoch: {epoch+1} Loss: {loss.item()} Train Err: {float(torch.sum(train_avg_error)/len(train_avg_error))}')
+    print(f'Epoch: {epoch+1} Loss: {RMSE_loss.item()} Train Err: {float(torch.sum(train_avg_error)/len(train_avg_error))}')
     
     model.eval()
     with torch.no_grad():
@@ -216,7 +220,7 @@ for epoch in range(epochs):
             lowest_valid_error = float(torch.sum(valid_avg_error)/len(valid_avg_error))
             best_epoch = epoch 
             path = os.getcwd() + "/checkpoint.tar"
-            save_model(path, model, optimizer, loss, best_epoch)
+            save_model(path, model, optimizer, RMSE_loss, best_epoch)
             strikes = 0
         else:
             strikes += 1

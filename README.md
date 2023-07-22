@@ -2,6 +2,11 @@
 
 The electrocardiogram (ECG) provides a non-invasive and cost-effective tool for diagnosing heart conditions. However, the standard 12-lead ECG is insufficient for mapping out the heart's electrical activity in detail for various clinical applications, such as identifying the origins of an arrhythmia. To address this challenge, we propose a data-driven approach that combines input from the standard 12-lead ECG with advanced machine learning techniques to reconstruct electroanatomical maps of the heart at clinically relevant resolutions.
 
+You can find the dataset for the Data Science Challenge on heartbeat classification at Kaggle:
+
+[ECG Heartbeat Categorization Dataset](https://www.kaggle.com/datasets/shayanfazeli/heartbeat)
+
+
 ## Task 1: Heartbeat Classification
 Classify Heartbeats into Healthy and Irregular Categories using the ECG Heartbeat Categorization Dataset. 
 
